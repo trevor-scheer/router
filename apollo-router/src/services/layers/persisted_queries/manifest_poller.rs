@@ -274,27 +274,7 @@ impl PersistedQueryManifestPoller {
                 }
             }
 
-            let freeform_graphql_behavior = if config.persisted_queries.safelist.enabled {
-                if config.persisted_queries.safelist.require_id {
-                    FreeformGraphQLBehavior::DenyAll {
-                        log_unknown: config.persisted_queries.log_unknown,
-                    }
-                } else {
-                    FreeformGraphQLBehavior::AllowIfInSafelist {
-                        safelist: FreeformGraphQLSafelist::new(&manifest),
-                        log_unknown: config.persisted_queries.log_unknown,
-                    }
-                }
-            } else if config.persisted_queries.log_unknown {
-                FreeformGraphQLBehavior::LogUnlessInSafelist {
-                    safelist: FreeformGraphQLSafelist::new(&manifest),
-                    apq_enabled: config.apq.enabled,
-                }
-            } else {
-                FreeformGraphQLBehavior::AllowAll {
-                    apq_enabled: config.apq.enabled,
-                }
-            };
+            let freeform_graphql_behavior = get_freeform_graphql_behavior(&config, &manifest);
 
             let state = Arc::new(RwLock::new(PersistedQueryManifestPollerState {
                 persisted_query_manifest: manifest.clone(),
@@ -536,27 +516,8 @@ async fn poll_uplink(
     while let Some(event) = uplink_executor.next().await {
         match event {
             ManifestPollEvent::NewManifest(new_manifest) => {
-                let freeform_graphql_behavior = if config.persisted_queries.safelist.enabled {
-                    if config.persisted_queries.safelist.require_id {
-                        FreeformGraphQLBehavior::DenyAll {
-                            log_unknown: config.persisted_queries.log_unknown,
-                        }
-                    } else {
-                        FreeformGraphQLBehavior::AllowIfInSafelist {
-                            safelist: FreeformGraphQLSafelist::new(&new_manifest),
-                            log_unknown: config.persisted_queries.log_unknown,
-                        }
-                    }
-                } else if config.persisted_queries.log_unknown {
-                    FreeformGraphQLBehavior::LogUnlessInSafelist {
-                        safelist: FreeformGraphQLSafelist::new(&new_manifest),
-                        apq_enabled: config.apq.enabled,
-                    }
-                } else {
-                    FreeformGraphQLBehavior::AllowAll {
-                        apq_enabled: config.apq.enabled,
-                    }
-                };
+                let freeform_graphql_behavior =
+                    get_freeform_graphql_behavior(&config, &new_manifest);
 
                 let new_state = PersistedQueryManifestPollerState {
                     persisted_query_manifest: new_manifest,
@@ -619,12 +580,39 @@ async fn poll_uplink(
     }
 }
 
+fn get_freeform_graphql_behavior(
+    config: &Configuration,
+    new_manifest: &HashMap<FullPersistedQueryOperationId, String>,
+) -> FreeformGraphQLBehavior {
+    if config.persisted_queries.safelist.enabled {
+        if config.persisted_queries.safelist.require_id {
+            FreeformGraphQLBehavior::DenyAll {
+                log_unknown: config.persisted_queries.log_unknown,
+            }
+        } else {
+            FreeformGraphQLBehavior::AllowIfInSafelist {
+                safelist: FreeformGraphQLSafelist::new(new_manifest),
+                log_unknown: config.persisted_queries.log_unknown,
+            }
+        }
+    } else if config.persisted_queries.log_unknown {
+        FreeformGraphQLBehavior::LogUnlessInSafelist {
+            safelist: FreeformGraphQLSafelist::new(new_manifest),
+            apq_enabled: config.apq.enabled,
+        }
+    } else {
+        FreeformGraphQLBehavior::AllowAll {
+            apq_enabled: config.apq.enabled,
+        }
+    }
+}
+
 async fn poll_fs(
     state: Arc<RwLock<PersistedQueryManifestPollerState>>,
     config: Configuration,
     ready_sender: mpsc::Sender<ManifestPollResultOnStartup>,
 ) {
-    let local_manifests = &config.persisted_queries.local_manifests.unwrap();
+    let local_manifests = config.persisted_queries.local_manifests.as_ref().unwrap();
 
     // create file watcher for each local persisted query manifest
     let file_watchers = local_manifests.iter().map(|raw_path| {
@@ -703,27 +691,7 @@ async fn poll_fs(
             }
         }
 
-        let freeform_graphql_behavior = if config.persisted_queries.safelist.enabled {
-            if config.persisted_queries.safelist.require_id {
-                FreeformGraphQLBehavior::DenyAll {
-                    log_unknown: config.persisted_queries.log_unknown,
-                }
-            } else {
-                FreeformGraphQLBehavior::AllowIfInSafelist {
-                    safelist: FreeformGraphQLSafelist::new(&complete_manifest),
-                    log_unknown: config.persisted_queries.log_unknown,
-                }
-            }
-        } else if config.persisted_queries.log_unknown {
-            FreeformGraphQLBehavior::LogUnlessInSafelist {
-                safelist: FreeformGraphQLSafelist::new(&complete_manifest),
-                apq_enabled: config.apq.enabled,
-            }
-        } else {
-            FreeformGraphQLBehavior::AllowAll {
-                apq_enabled: config.apq.enabled,
-            }
-        };
+        let freeform_graphql_behavior = get_freeform_graphql_behavior(&config, &complete_manifest);
 
         tracing::info!(
             "Loaded {} persisted queries from local file.",
