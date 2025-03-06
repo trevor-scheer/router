@@ -1,7 +1,6 @@
 ---
 source: apollo-router/src/configuration/tests.rs
 expression: "&schema"
-snapshot_kind: text
 ---
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -4424,6 +4423,11 @@ snapshot_kind: text
         "experimental_prewarm_query_plan_cache": {
           "$ref": "#/definitions/PersistedQueriesPrewarmQueryPlanCache",
           "description": "#/definitions/PersistedQueriesPrewarmQueryPlanCache"
+        },
+        "hot_reload": {
+          "default": false,
+          "description": "Enables hot reloading of the local persisted query manifests",
+          "type": "boolean"
         },
         "local_manifests": {
           "default": null,
