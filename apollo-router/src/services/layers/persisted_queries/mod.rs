@@ -1,5 +1,6 @@
 //! Implements support for persisted queries and safelisting at the supergraph service stage.
 
+mod freeform_graphql_behavior;
 mod id_extractor;
 mod manifest_poller;
 
@@ -12,7 +13,7 @@ use http::header::CACHE_CONTROL;
 use id_extractor::PersistedQueryIdExtractor;
 pub use manifest_poller::FullPersistedQueryOperationId;
 pub use manifest_poller::PersistedQueryManifest;
-pub(crate) use manifest_poller::PersistedQueryManifestPoller;
+use manifest_poller::PersistedQueryManifestPoller;
 use tower::BoxError;
 
 use super::query_analysis::ParsedDocument;
@@ -454,10 +455,10 @@ mod tests {
     use crate::configuration::PersistedQueriesSafelist;
     use crate::configuration::Supergraph;
     use crate::metrics::FutureMetricsExt;
-    use crate::services::layers::persisted_queries::manifest_poller::FreeformGraphQLBehavior;
     use crate::services::layers::query_analysis::QueryAnalysisLayer;
     use crate::spec::Schema;
     use crate::test_harness::mocks::persisted_queries::*;
+    use freeform_graphql_behavior::FreeformGraphQLBehavior;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn disabled_pq_layer_has_no_poller() {
