@@ -83,14 +83,14 @@ impl PersistedQueryManifest {
     }
 
     /// Add a chunk to the manifest.
-    pub(crate) fn add_chunk(&mut self, chunk: SignedUrlChunk) {
-        for operation in chunk.operations {
+    pub(crate) fn add_chunk(&mut self, chunk: &SignedUrlChunk) {
+        for operation in &chunk.operations {
             self.manifest.insert(
                 FullPersistedQueryOperationId {
-                    operation_id: operation.id,
-                    client_name: operation.client_name,
+                    operation_id: operation.id.clone(),
+                    client_name: operation.client_name.clone(),
                 },
-                operation.body,
+                operation.body.clone(),
             );
         }
     }

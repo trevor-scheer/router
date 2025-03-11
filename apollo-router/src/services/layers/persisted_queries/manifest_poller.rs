@@ -272,7 +272,7 @@ async fn fetch_chunk_into_manifest(
     while let Some(chunk_url) = it.next() {
         match fetch_chunk(http_client.clone(), chunk_url).await {
             Ok(chunk) => {
-                manifest.add_chunk(chunk);
+                manifest.add_chunk(&chunk);
                 return Ok(());
             }
             Err(e) => {
@@ -335,7 +335,7 @@ async fn load_local_manifests(paths: Vec<String>) -> Result<PersistedQueryManife
 
     for path in paths.iter() {
         let chunk = parse_and_validate_chunk_at_path(path).await?;
-        complete_manifest.add_chunk(chunk.validate()?);
+        complete_manifest.add_chunk(&chunk.validate()?);
     }
 
     tracing::info!(
@@ -381,7 +381,7 @@ fn create_hot_reload_stream(
 
             let mut manifest = PersistedQueryManifest::new();
             for chunk in chunks.values() {
-                manifest.add_chunk(chunk.clone());
+                manifest.add_chunk(chunk);
             }
 
             manifest
