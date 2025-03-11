@@ -1,7 +1,7 @@
-use super::{FullPersistedQueryOperationId, PersistedQueryManifest};
+use super::PersistedQueryManifest;
 use crate::Configuration;
 use apollo_compiler::ast;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Describes whether the router should allow or deny a given request.
 /// with an error, or allow it but log the operation as unknown.
@@ -173,7 +173,7 @@ impl FreeformGraphQLSafelist {
 /// Determine behavior based on PQ configuration
 pub(super) fn get_freeform_graphql_behavior(
     config: &Configuration,
-    new_manifest: &HashMap<FullPersistedQueryOperationId, String>,
+    new_manifest: &PersistedQueryManifest,
 ) -> FreeformGraphQLBehavior {
     if config.persisted_queries.safelist.enabled {
         if config.persisted_queries.safelist.require_id {

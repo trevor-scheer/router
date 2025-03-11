@@ -405,7 +405,6 @@ async fn automated_persisted_queries() {
 async fn persisted_queries() {
     use hyper::header::HeaderValue;
     use serde_json::json;
-
     /// Construct a persisted query request from an ID.
     fn pq_request(persisted_query_id: &str) -> router::Request {
         supergraph::Request::fake_builder()
@@ -430,16 +429,14 @@ async fn persisted_queries() {
         "name": "Ada Lovelace"
       }
     });
-    let map = [(
-        FullPersistedQueryOperationId {
-            operation_id: PERSISTED_QUERY_ID.to_string(),
-            client_name: None,
-        },
+
+    let manifest = mock_manifest(vec![(
+        PERSISTED_QUERY_ID.to_string(),
         PERSISTED_QUERY_BODY.to_string(),
-    )]
-    .into_iter()
-    .collect();
-    let (_mock_guard, uplink_config) = mock_pq_uplink(&map).await;
+        None,
+    )]);
+
+    let (_mock_guard, uplink_config) = mock_pq_uplink(&manifest).await;
 
     let config = serde_json::json!({
         "persisted_queries": {

@@ -1,8 +1,6 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use async_compression::tokio::write::GzipEncoder;
-use maplit::hashmap;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -14,8 +12,10 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::header;
 use wiremock::matchers::method;
 
-pub use crate::services::layers::persisted_queries::FullPersistedQueryOperationId;
-pub use crate::services::layers::persisted_queries::PersistedQueryManifest;
+use crate::services::layers::persisted_queries::ManifestOperation;
+pub use crate::services::layers::persisted_queries::{
+    FullPersistedQueryOperationId, PersistedQueryManifest,
+};
 use crate::uplink::Endpoints;
 use crate::uplink::UplinkConfig;
 
@@ -23,18 +23,31 @@ use crate::uplink::UplinkConfig;
 pub fn fake_manifest() -> (String, String, PersistedQueryManifest) {
     let id = "1234".to_string();
     let body = r#"query { typename }"#.to_string();
-    let manifest = hashmap! {
-      FullPersistedQueryOperationId {
-        operation_id: id.to_string(),
+    let manifest = PersistedQueryManifest::from(vec![ManifestOperation {
+        id: id.clone(),
+        body: body.clone(),
         client_name: None,
-      } => body.to_string()
-    };
+    }]);
     (id, body, manifest)
+}
+
+/// Get a query ID, body, and a PQ manifest with that ID and body.
+pub fn mock_manifest(operations: Vec<(String, String, Option<String>)>) -> PersistedQueryManifest {
+    PersistedQueryManifest::from(
+        operations
+            .into_iter()
+            .map(|(id, body, client_name)| ManifestOperation {
+                id,
+                body,
+                client_name,
+            })
+            .collect::<Vec<_>>(),
+    )
 }
 
 /// Mocks an uplink server with a persisted query list containing no operations.
 pub async fn mock_empty_pq_uplink() -> (UplinkMockGuard, UplinkConfig) {
-    mock_pq_uplink(&HashMap::new()).await
+    mock_pq_uplink(&PersistedQueryManifest::new()).await
 }
 
 /// Mocks an uplink server with a persisted query list with a delay.
