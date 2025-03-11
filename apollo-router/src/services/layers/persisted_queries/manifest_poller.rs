@@ -239,7 +239,7 @@ async fn poll_manifest_stream(
     }
 }
 
-async fn manifest_from_chunks(
+async fn manifest_from_uplink_chunks(
     new_chunks: Vec<PersistedQueriesManifestChunk>,
     http_client: Client,
 ) -> Result<PersistedQueryManifest, BoxError> {
@@ -247,7 +247,7 @@ async fn manifest_from_chunks(
     tracing::debug!("ingesting new persisted queries: {:?}", &new_chunks);
     // TODO: consider doing these fetches in parallel
     for new_chunk in new_chunks {
-        add_chunk_to_operations(
+        fetch_chunk_into_manifest(
             new_chunk,
             &mut new_persisted_query_manifest,
             http_client.clone(),
@@ -263,7 +263,7 @@ async fn manifest_from_chunks(
     Ok(new_persisted_query_manifest)
 }
 
-async fn add_chunk_to_operations(
+async fn fetch_chunk_into_manifest(
     chunk: PersistedQueriesManifestChunk,
     manifest: &mut PersistedQueryManifest,
     http_client: Client,
@@ -334,24 +334,7 @@ async fn load_local_manifests(paths: Vec<String>) -> Result<PersistedQueryManife
     let mut complete_manifest = PersistedQueryManifest::new();
 
     for path in paths.iter() {
-        let raw_file_contents = read_to_string(path).await.map_err(|e| -> BoxError {
-            format!(
-                "Failed to read persisted query list file at path: {}, {}",
-                path, e
-            )
-            .into()
-        })?;
-
-        let chunk = serde_json::from_str::<SignedUrlChunk>(&raw_file_contents).map_err(
-            |e| -> BoxError {
-                format!(
-                    "Could not parse local persisted query list file at path {}: {}",
-                    path, e
-                )
-                .into()
-            },
-        )?;
-
+        let chunk = parse_and_validate_chunk_at_path(path).await?;
         complete_manifest.add_chunk(chunk.validate()?);
     }
 
@@ -371,18 +354,8 @@ fn create_hot_reload_stream(
         crate::files::watch(std::path::Path::new(&raw_path.clone())).filter_map(move |_| {
             let raw_path = raw_path.clone();
             async move {
-                match read_to_string(&std::path::Path::new(&raw_path.clone())).await {
-                    Ok(contents) => match serde_json::from_str::<SignedUrlChunk>(&contents) {
-                        Ok(chunk) => Some(chunk.validate().map(|chunk| (raw_path, chunk))),
-                        Err(e) => {
-                            tracing::error!(
-                                "Could not parse local persisted query list file at path {}: {}",
-                                raw_path,
-                                e
-                            );
-                            None
-                        }
-                    },
+                match parse_and_validate_chunk_at_path(&raw_path).await {
+                    Ok(chunk) => Some(Ok((raw_path, chunk))),
                     Err(e) => {
                         tracing::error!(
                             "Failed to read persisted query list file at path: {}, {}",
@@ -397,23 +370,44 @@ fn create_hot_reload_stream(
         })
     });
 
-    // We need to keep track of the local manifests so we can replace them when
+    // We need to keep track of the local manifest chunks so we can replace them when
     // they change.
-    let mut manifests: HashMap<String, SignedUrlChunk> = HashMap::new();
+    let mut chunks: HashMap<String, SignedUrlChunk> = HashMap::new();
 
     // Combine all watchers into a single stream
     stream::select_all(file_watchers).map(move |result| {
         result.map(|(path, chunk)| {
-            manifests.insert(path, chunk);
+            chunks.insert(path, chunk);
 
             let mut manifest = PersistedQueryManifest::new();
-            for chunk in manifests.values() {
+            for chunk in chunks.values() {
                 manifest.add_chunk(chunk.clone());
             }
 
             manifest
         })
     })
+}
+
+async fn parse_and_validate_chunk_at_path(path: &str) -> Result<SignedUrlChunk, BoxError> {
+    let raw_file_contents = read_to_string(path).await.map_err(|e| -> BoxError {
+        format!(
+            "Failed to read persisted query list file at path: {}, {}",
+            path, e
+        )
+        .into()
+    })?;
+
+    let parsed_chunk =
+        serde_json::from_str::<SignedUrlChunk>(&raw_file_contents).map_err(|e| -> BoxError {
+            format!(
+                "Could not parse local persisted query list file at path {}: {}",
+                path, e
+            )
+            .into()
+        })?;
+
+    parsed_chunk.validate()
 }
 
 fn create_uplink_stream(
@@ -428,7 +422,7 @@ fn create_uplink_stream(
         let http_client = http_client.clone();
         Box::new(Box::pin(async move {
             match response {
-                Some(chunks) => manifest_from_chunks(chunks, http_client)
+                Some(chunks) => manifest_from_uplink_chunks(chunks, http_client)
                     .await
                     .map(Some)
                     .map_err(|e| -> BoxError { e.into() }),
